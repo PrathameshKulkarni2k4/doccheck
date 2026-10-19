@@ -369,9 +369,11 @@ def _check_link(repo: Repo, claim: Claim) -> List[Finding]:
     if not path:
         return _check_anchor(repo, claim, claim.doc, anchor)
 
-    # An absolute link is a route on a documentation site (`/guides/intro`,
-    # `/rea/product-catalog.json`), not a file in the repository.
-    if path.startswith("/"):
+    # A leading slash with no file extension is a route on a documentation
+    # site (`/guides/intro`). With an extension it is a repository-root path,
+    # which GitHub-flavoured Markdown resolves - `/.github/AI_POLICY.md` is a
+    # real file reference, and skipping it would be a false negative.
+    if path.startswith("/") and not os.path.splitext(path)[1]:
         return []
 
     resolved, found = locate(repo, claim.doc, path)

@@ -106,6 +106,16 @@ def test_home_directory_and_mime_and_routes_are_ignored(tmp_path):
     assert findings_for(tmp_path, text="Returns `application/json`.\n") == []
     assert findings_for(tmp_path, text="A `GET /users/` route.\n") == []
     assert findings_for(tmp_path, text="`deploying/asgi` and `tools/list`.\n") == []
+    assert findings_for(tmp_path, text="See [intro](/guides/intro).\n") == []
+
+
+def test_repository_root_link_is_checked(tmp_path):
+    # GitHub resolves `/.github/AI_POLICY.md` from the repo root, so a broken
+    # one is real drift - found on psf/requests.
+    write_repo(tmp_path, {".github/AI_POLICY.md": "# policy\n"})
+    assert findings_for(tmp_path, text="See [policy](/.github/AI_POLICY.md).\n") == []
+    broken = findings_for(tmp_path, text="See [policy](/.github/OLD_POLICY.md).\n")
+    assert [f.kind for f in broken] == ["link"]
 
 
 def test_changelogs_are_skipped_unless_asked_for(tmp_path):
@@ -276,3 +286,27 @@ def test_cli_since_only_reports_answerable_drift(tmp_path, capsys):
     out = capsys.readouterr().out
     assert code == 0
     assert "old_name" not in out
+
+
+def test_cli_since_catches_a_renamed_target(tmp_path, capsys):
+    # git reports a rename as one entry with the NEW name unless --no-renames
+    # is passed, and the deleted path is exactly what a broken link points at.
+    write_repo(tmp_path, {
+        "docs/policy.md": "# policy\n",
+        "README.md": "See [policy](docs/policy.md).\n",
+    })
+    for args in (["init", "-q"], ["add", "-A"]):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"],
+        cwd=tmp_path, check=True,
+    )
+    subprocess.run(["git", "mv", "docs/policy.md", "docs/policy-old.md"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "rename"],
+        cwd=tmp_path, check=True,
+    )
+    code = main(["--root", str(tmp_path), "--since", "HEAD~1"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "policy.md" in out

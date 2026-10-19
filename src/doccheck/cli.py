@@ -131,8 +131,11 @@ def _discover(root: Path, paths: Sequence[str], include: Sequence[str], exclude:
 
 def _changed_files(root: Path, ref: str) -> Optional[Set[str]]:
     try:
+        # --no-renames matters: a rename is reported by default as one entry
+        # with the *new* name, so the deleted path never reaches the check -
+        # and that deleted path is exactly what a broken link points at.
         result = subprocess.run(
-            ["git", "-C", str(root), "diff", "--name-only", ref],
+            ["git", "-C", str(root), "diff", "--name-only", "--no-renames", ref],
             capture_output=True, text=True, check=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
