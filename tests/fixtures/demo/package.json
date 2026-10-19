@@ -1,0 +1,8 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "node test/run.js"
+  }
+}
